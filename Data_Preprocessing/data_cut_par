@@ -1,0 +1,78 @@
+import numpy as np
+import netCDF4 as nc
+import pandas
+import csv
+import datetime as dt
+import cftime as cftime
+def to_datetime(d):
+
+    if isinstance(d, dt.datetime):
+        return d
+    if isinstance(d, cftime.DatetimeNoLeap):
+        return dt.datetime(d.year, d.month, d.day, d.hour, d.minute, d.second)
+    elif isinstance(d, cftime.DatetimeGregorian):
+        return dt.datetime(d.year, d.month, d.day,d.hour, d.minute, d.second)
+    elif isinstance(d, str):
+        errors = []
+        for fmt in (
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%SZ"):
+            try:
+                return dt.datetime.strptime(d, fmt)
+            except ValueError as e:
+                errors.append(e)
+                continue
+        raise Exception(errors)
+    elif isinstance(d, np.datetime64):
+        return d.astype(dt.datetime)
+    else:
+        raise Exception("Unknown value: {} type: {}".format(d, type(d)))
+def to_csv(source_file,writer):
+    # 读取nc数据
+    dataset = nc.Dataset(source_file)
+    #获取相应数组集合--纬度经度温度深度
+    lat_set = dataset.variables['latitude'][:]
+    lon_set = dataset.variables['longitude'][:]
+    time = dataset.variables['time'][:]
+    real_time = nc.num2date(time, 'seconds since 1970-01-01 00:00')
+    par=dataset.variables['par']
+    # 文件名不含扩展名
+    source_file = source_file.split('.')
+    file_name = source_file[0]
+    # 创建csv目标文件
+
+    # 写入数据
+    for i in range(len(time)):
+        for j in range(len(lat_set)):  # j为纬度
+            for k in range(len(lon_set)):  # k为经度
+                if par[i][j][k]!=None:
+                    writer.writerow((lat_set[j], lon_set[k], str(to_datetime(real_time[i]))[:-8],round(float(par[i][j][k]),2)))
+
+
+
+if '__name__ ==__main__':
+    print("start transfrom!")
+    file_name="par_interp"
+    try:
+        # 打开目标csv文件
+        with open(file_name + '.csv', 'a', newline='') as targetFile:
+            # 创建写入流
+            writer = csv.writer(targetFile)
+            # 写入表头
+            writer.writerow(('lat', 'lon', 'time', 'par/einstein m-2 day-1'
+                             ))
+
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2015.nc",writer)
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2016.nc",writer)
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2017.nc",writer)
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2018.nc",writer)
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2019.nc",writer)
+            to_csv(r"C:\Users\lin\Desktop\Design\Datasets\PAR\par_interp_2020.nc",writer)
+        targetFile.close()  # 关闭文件
+        print('Get' + file_name + '.csv Success!')
+    except Exception as e:  # 抛异常
+        print('Error :' + str(e))
+    print('Transform successfully')
+
+# 去掉空值

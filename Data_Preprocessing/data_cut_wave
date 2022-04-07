@@ -1,0 +1,88 @@
+import numpy as np
+import netCDF4 as nc
+import pandas
+import csv
+import datetime as dt
+import cftime as cftime
+def to_datetime(d):
+
+    if isinstance(d, dt.datetime):
+        return d
+    if isinstance(d, cftime.DatetimeNoLeap):
+        return dt.datetime(d.year, d.month, d.day, d.hour, d.minute, d.second)
+    elif isinstance(d, cftime.DatetimeGregorian):
+        return dt.datetime(d.year, d.month, d.day, d.hour, d.minute, d.second)
+    elif isinstance(d, str):
+        errors = []
+        for fmt in (
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%dT%H:%M:%SZ"):
+            try:
+                return dt.datetime.strptime(d, fmt)
+            except ValueError as e:
+                errors.append(e)
+                continue
+        raise Exception(errors)
+    elif isinstance(d, np.datetime64):
+        return d.astype(dt.datetime)
+    else:
+        raise Exception("Unknown value: {} type: {}".format(d, type(d)))
+def to_csv(source_file):
+    # 读取nc数据
+    dataset = nc.Dataset(source_file)
+    # 获取相应数组集合--纬度经度温度深度
+    lat_set = dataset.variables['lat'][:]
+    lon_set = dataset.variables['lon'][:]
+    time = dataset.variables['time'][:]
+    
+    real_time = nc.num2date(time,'seconds since 2015-01-01 00:00:00')
+    depth=dataset.variables['depth'][:]
+    uo=dataset.variables['uo'][:]
+    vo=dataset.variables['vo'][:]
+    index = []  # 把满足条件的经纬度放入列表index之中
+    for j in range(len(lat_set)):  # j为纬度
+        for k in range(len(lon_set)):  # k为经度
+            if lat_set[j] >= 27 and lat_set[j] <= 28.5:
+                if lon_set[k] >= 120.0 and lon_set[k] <= 123:
+                    index.append((j, k))  # 插入满足条件的数据
+    print('输出index列表：')
+    print(index)
+    print('-------------------------------------------------------------------')
+    # 文件名不含扩展名
+    source_file = source_file.split('.')
+    file_name = source_file[0]
+    for d in range(len(depth)):
+
+        file_name = "wave_daily_"
+        # 创建csv目标文件
+        try:
+            # 打开目标csv文件
+            with open(file_name + str(d)+'.csv', 'a', newline='') as targetFile:
+                # 创建写入流
+                writer = csv.writer(targetFile)
+                # 写入表头
+                writer.writerow(('lat', 'lon', 'time', 'depth/m', 'eastward_velocity/m/s', 'northward_velocity/m/s'
+                                 ))
+
+                for i in range(len(real_time)):
+                    for j in range(len(lat_set)):  # j为纬度
+                        for k in range(len(lon_set)):  # k为经度
+                            if lat_set[j] >= 27 and lat_set[j] <= 28.5:
+                                if lon_set[k] >= 120.0 and lon_set[k] <= 123.75:
+                                    if uo[i][d][j][k]!=None and vo[i][d][j][k]!=None:
+                                        writer.writerow((lat_set[j], lon_set[k],  str(to_datetime(real_time[i]))[:-8], d,round(float(uo[i][d][j][k]),2),round(float(vo[i][d][j][k]),2)))
+            targetFile.close()  # 关闭文件
+            print('Get' + file_name + '.csv Success!')
+        except Exception as e:  # 抛异常
+            print('Error :' + str(e))
+
+
+if '__name__ ==__main__':
+    print("start transfrom!")
+
+    to_csv(r"C:\Users\lin\Desktop\Design\Datasets\wave\MetO-GLO-PHY-CPL-dm-CUR_15.nc")
+
+    print('Transform successfully')
+
+# 去掉空值
